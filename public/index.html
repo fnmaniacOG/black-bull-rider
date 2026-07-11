@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🐂 BLACK BULL RIDER — $ANSEM</title>
+<script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0f; --panel: #14141d; --edge: #26263a;
+    --gold: #ffb300; --green: #00e676; --red: #ff5252; --text: #eaeaf2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; border-bottom: 1px solid var(--edge); }
+  header h1 { font-size: 22px; letter-spacing: 1px; }
+  header h1 span { color: var(--gold); }
+  .stats { display: flex; gap: 18px; font-size: 13px; }
+  .stats b { color: var(--gold); }
+  .stats .burn b { color: var(--red); }
+  #connectBtn, #playBtn, #cashoutBtn {
+    font-family: inherit; font-weight: 800; border: none; border-radius: 10px; cursor: pointer;
+    padding: 12px 26px; font-size: 16px; transition: transform .08s;
+  }
+  #connectBtn { background: #7b5cff; color: #fff; padding: 9px 18px; font-size: 14px; }
+  #playBtn { background: var(--gold); color: #14141d; font-size: 18px; }
+  #cashoutBtn { background: var(--green); color: #08130b; font-size: 20px; padding: 16px 40px; display: none; }
+  button:active { transform: scale(.96); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  main { max-width: 1000px; margin: 18px auto; padding: 0 16px; }
+  #arena {
+    position: relative; height: 520px; border: 1px solid var(--edge); border-radius: 16px;
+    background: radial-gradient(ellipse at 50% 120%, #1c1428 0%, #0a0a0f 70%);
+    overflow: hidden; cursor: crosshair; touch-action: manipulation;
+  }
+  #multiplier {
+    position: absolute; top: 40%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 84px; font-weight: 900; color: var(--gold); text-shadow: 0 0 40px rgba(255,179,0,.35);
+    pointer-events: none; z-index: 1;
+  }
+  #bull { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-size: 56px; pointer-events: none; transition: transform .1s; }
+  #status { text-align: center; margin: 14px 0 6px; min-height: 22px; font-size: 14px; color: #9a9ab0; }
+  #fair { text-align: center; font-size: 11px; color: #55556e; word-break: break-all; margin-top: 8px; }
+  .controls { display: flex; justify-content: center; gap: 16px; margin-top: 14px; }
+
+  .target {
+    position: absolute; display: flex; align-items: center; justify-content: center;
+    font-weight: 900; cursor: pointer; z-index: 5;
+    animation: pop .18s ease-out; will-change: transform;
+    text-shadow: 0 2px 6px rgba(0,0,0,.6);
+  }
+  .target .shrink { position: absolute; inset: -5px; border-radius: inherit; border: 3px solid rgba(255,255,255,.7); animation: ttl linear forwards; }
+  .shape-circle { border-radius: 50%; }
+  .shape-square { border-radius: 12%; }
+  .shape-hex { clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%); }
+  .shape-diamond { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+  .shape-star { clip-path: polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%); }
+  .decoy { animation: pop .18s ease-out, alarm .5s infinite alternate; }
+  @keyframes pop { from { transform: scale(.2); } }
+  @keyframes ttl { from { opacity: 1; } to { opacity: 0; transform: scale(.55); } }
+  @keyframes alarm { from { filter: brightness(1); } to { filter: brightness(1.9) hue-rotate(-20deg); } }
+  @keyframes shake { 0%,100%{transform:translate(-50%,-50%)} 25%{transform:translate(calc(-50% - 8px),-50%)} 75%{transform:translate(calc(-50% + 8px),-50%)} }
+
+  #overlay {
+    position: absolute; inset: 0; display: none; z-index: 20; flex-direction: column;
+    align-items: center; justify-content: center; background: rgba(8,8,14,.82); text-align: center; border-radius: 16px;
+  }
+  #overlay h2 { font-size: 46px; margin-bottom: 8px; }
+  #overlay p { color: #b8b8cc; font-size: 15px; max-width: 520px; }
+  .win h2 { color: var(--green); } .lose h2 { color: var(--red); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🐂 BLACK BULL <span>RIDER</span> <small style="font-size:12px;color:#7b5cff">$ANSEM</small></h1>
+  <div class="stats">
+    <div>PRIZE POOL <b id="poolStat">—</b></div>
+    <div class="burn">🔥 BURNED <b id="burnStat">—</b></div>
+    <div id="clusterStat" style="color:#55556e">devnet</div>
+  </div>
+  <button id="connectBtn">Connect Phantom</button>
+</header>
+
+<main>
+  <div id="arena">
+    <div id="multiplier">1.00x</div>
+    <div id="bull">🐂</div>
+    <div id="overlay"><h2></h2><p></p></div>
+  </div>
+  <div id="status">Connect your wallet to ride. Entry: 2 $ANSEM — 1 to the prize pool, 1 burned forever.</div>
+  <div class="controls">
+    <button id="playBtn" disabled>PAY 2 $ANSEM & RIDE</button>
+    <button id="cashoutBtn">CASH OUT (SPACE)</button>
+  </div>
+  <div id="fair"></div>
+</main>
+
+<script>
+const { Connection, PublicKey, Transaction, TransactionInstruction } = solanaWeb3;
+const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+
+const $ = (id) => document.getElementById(id);
+const arena = $("arena"), multEl = $("multiplier"), overlay = $("overlay"), statusEl = $("status");
+
+let cfg = null, ws = null, provider = null, wallet = null;
+let running = false, lastMult = 1, mousePath = [];
+
+// ---------- boot ----------
+init();
+async function init() {
+  cfg = await (await fetch("/api/config")).json();
+  $("clusterStat").textContent = cfg.devMode ? "DEV MODE (free play)" : cfg.cluster;
+  refreshStats(); setInterval(refreshStats, 8000);
+  openSocket();
+  if (cfg.devMode) { wallet = "dev-" + Math.random().toString(36).slice(2, 10); onConnected(); }
+}
+
+async function refreshStats() {
+  try {
+    const s = await (await fetch("/api/stats")).json();
+    $("poolStat").textContent = fmt(s.poolTokens) + " $ANSEM";
+    $("burnStat").textContent = fmt(s.burnedTokens) + " $ANSEM";
+  } catch {}
+}
+const fmt = (n) => Number(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+// ---------- wallet ----------
+$("connectBtn").onclick = async () => {
+  provider = window.phantom?.solana || window.solana;
+  if (!provider?.isPhantom) return alert("Phantom wallet not found — install it, and set network to Devnet.");
+  const res = await provider.connect();
+  wallet = res.publicKey.toBase58();
+  onConnected();
+};
+function onConnected() {
+  $("connectBtn").textContent = wallet.slice(0, 4) + "…" + wallet.slice(-4);
+  $("playBtn").disabled = false;
+  statusEl.textContent = cfg.devMode ? "Dev mode: free play, no tokens needed. Press RIDE." : "Ready. Entry is one atomic tx: 1 $ANSEM → pool, 1 $ANSEM → 🔥 burned.";
+  hello();
+}
+
+// ---------- websocket ----------
+function openSocket() {
+  ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host);
+  ws.onmessage = (e) => handle(JSON.parse(e.data));
+  ws.onclose = () => setTimeout(openSocket, 1500);
+  ws.onopen = () => wallet && hello();
+}
+function hello() {
+  const r = arena.getBoundingClientRect();
+  send({ type: "hello", wallet, arena: { w: r.width, h: r.height }, clientSeed: "ansem-" + wallet.slice(0, 8) });
+}
+const send = (m) => ws?.readyState === 1 && ws.send(JSON.stringify(m));
+
+// ---------- entry tx: transfer half to pool + burn half, atomically ----------
+function ataFor(owner, mint) {
+  return PublicKey.findProgramAddressSync(
+    [owner.toBytes(), TOKEN_PROGRAM.toBytes(), mint.toBytes()], ATA_PROGRAM)[0];
+}
+function u64le(n) {
+  const b = new Uint8Array(8); let v = BigInt(n);
+  for (let i = 0; i < 8; i++) { b[i] = Number(v & 0xffn); v >>= 8n; }
+  return b;
+}
+function transferCheckedIx(srcAta, mint, dstAta, owner, amount, decimals) {
+  return new TransactionInstruction({
+    programId: TOKEN_PROGRAM,
+    keys: [
+      { pubkey: srcAta, isSigner: false, isWritable: true },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: dstAta, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: true, isWritable: false }
+    ],
+    data: new Uint8Array([12, ...u64le(amount), decimals]) // TransferChecked
+  });
+}
+function burnCheckedIx(srcAta, mint, owner, amount, decimals) {
+  return new TransactionInstruction({
+    programId: TOKEN_PROGRAM,
+    keys: [
+      { pubkey: srcAta, isSigner: false, isWritable: true },
+      { pubkey: mint, isSigner: false, isWritable: true },
+      { pubkey: owner, isSigner: true, isWritable: false }
+    ],
+    data: new Uint8Array([15, ...u64le(amount), decimals]) // BurnChecked
+  });
+}
+
+async function payEntry() {
+  const conn = new Connection(cfg.cluster === "devnet" ? "https://api.devnet.solana.com" : "https://api.mainnet-beta.solana.com", "confirmed");
+  const owner = new PublicKey(wallet);
+  const mint = new PublicKey(cfg.mint);
+  const half = BigInt(cfg.entryFeeTokens) * BigInt(10 ** cfg.decimals) / 2n;
+  const myAta = ataFor(owner, mint);
+  const poolAta = new PublicKey(cfg.prizeAta);
+
+  const tx = new Transaction().add(
+    transferCheckedIx(myAta, mint, poolAta, owner, half, cfg.decimals),
+    burnCheckedIx(myAta, mint, owner, half, cfg.decimals)
+  );
+  tx.feePayer = owner;
+  tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+  const { signature } = await provider.signAndSendTransaction(tx);
+  statusEl.textContent = "Confirming entry tx (1 → pool, 1 → 🔥)…";
+  await conn.confirmTransaction(signature, "confirmed");
+  return signature;
+}
+
+// ---------- game flow ----------
+$("playBtn").onclick = async () => {
+  try {
+    $("playBtn").disabled = true;
+    overlay.style.display = "none";
+    let signature = "dev";
+    if (!cfg.devMode) signature = await payEntry();
+    send({ type: "start", signature });
+  } catch (e) {
+    statusEl.textContent = "Entry failed: " + (e.message || e);
+    $("playBtn").disabled = false;
+  }
+};
+$("cashoutBtn").onclick = () => send({ type: "cashout" });
+document.addEventListener("keydown", (e) => { if (e.code === "Space" && running) { e.preventDefault(); send({ type: "cashout" }); } });
+
+// mouse telemetry (anti-bot): sampled path since the last whack
+arena.addEventListener("mousemove", (e) => {
+  const r = arena.getBoundingClientRect();
+  mousePath.push({ x: e.clientX - r.left, y: e.clientY - r.top, t: Date.now() });
+  if (mousePath.length > 60) mousePath.shift();
+});
+
+function handle(m) {
+  switch (m.type) {
+    case "round_ready":
+      $("fair").textContent = "provably fair — commit(sha256 of server seed): " + m.commit + "  nonce: " + m.nonce;
+      statusEl.textContent = "🐂 Mount up…";
+      break;
+    case "started":
+      running = true; lastMult = 1;
+      $("playBtn").style.display = "none";
+      $("cashoutBtn").style.display = "inline-block";
+      statusEl.textContent = "WHACK every letter before it fades. DON'T touch the 💣 bombs. Cash out any time!";
+      break;
+    case "tick":
+      lastMult = m.m;
+      multEl.textContent = m.m.toFixed(2) + "x";
+      multEl.style.fontSize = Math.min(84 + m.m * 4, 130) + "px";
+      $("bull").style.transform = `translateX(-50%) rotate(${(Math.random() - .5) * m.m * 4}deg)`;
+      $("cashoutBtn").textContent = `CASH OUT ${(cfg.payoutBaseTokens * m.m).toFixed(2)} $ANSEM (SPACE)`;
+      break;
+    case "spawn": spawnTarget(m.target); break;
+    case "despawn": document.getElementById("t-" + m.id)?.remove(); break;
+    case "whacked": {
+      const el = document.getElementById("t-" + m.id);
+      if (el) { el.style.transition = "transform .12s, opacity .12s"; el.style.transform += " scale(1.6)"; el.style.opacity = "0"; setTimeout(() => el.remove(), 130); }
+      break;
+    }
+    case "crashed": endRound(false, m); break;
+    case "cashed_out": endRound(true, m); break;
+    case "error":
+      statusEl.textContent = "⚠ " + m.reason;
+      $("playBtn").disabled = false;
+      break;
+  }
+}
+
+function spawnTarget(t) {
+  const el = document.createElement("div");
+  el.className = `target shape-${t.shape}` + (t.isDecoy ? " decoy" : "");
+  el.id = "t-" + t.id;
+  el.textContent = t.isDecoy ? "💣" : t.letter;
+  const r = arena.getBoundingClientRect();
+  Object.assign(el.style, {
+    width: t.size + "px", height: t.size + "px",
+    left: t.x * r.width - t.size / 2 + "px", top: t.y * r.height - t.size / 2 + "px",
+    background: t.isDecoy ? "#3a0d0d" : t.color,
+    color: t.isDecoy ? "#ff5252" : "#101018",
+    fontSize: t.size * 0.5 + "px",
+    transform: `rotate(${t.rot}deg)`,
+    border: t.isDecoy ? "2px solid #ff5252" : "none"
+  });
+  if (!t.isDecoy) {
+    const ring = document.createElement("div");
+    ring.className = "shrink"; ring.style.animationDuration = t.ttl + "ms";
+    el.appendChild(ring);
+  }
+  el.addEventListener("pointerdown", (ev) => {
+    ev.stopPropagation();
+    const rr = arena.getBoundingClientRect();
+    send({ type: "whack", id: t.id, x: ev.clientX - rr.left, y: ev.clientY - rr.top, path: mousePath });
+    mousePath = [];
+  });
+  arena.appendChild(el);
+  setTimeout(() => el.remove(), t.ttl + 300);
+}
+
+function endRound(win, m) {
+  running = false;
+  document.querySelectorAll(".target").forEach((el) => el.remove());
+  $("cashoutBtn").style.display = "none";
+  $("playBtn").style.display = "inline-block";
+  $("playBtn").disabled = false;
+  overlay.className = win ? "win" : "lose";
+  overlay.style.display = "flex";
+
+  const reasons = {
+    missed_letter: "You missed a letter — the bull bucked you off!",
+    hit_bomb: "You whacked a 💣 — instant faceplant.",
+    crash_point: "The bull crashed out at " + (m.crashPoint || m.m) + "x.",
+    bot_flagged: "Anti-bot system flagged this session.",
+    disconnected: "Connection lost."
+  };
+  if (win) {
+    const paid = m.payout?.ok ? (m.payout.devMode ? `${m.tokens} $ANSEM (dev mode — simulated)` : `${m.tokens} $ANSEM paid! tx: ${String(m.payout.signature).slice(0, 16)}…`) : `payout issue: ${m.payout?.reason}`;
+    overlay.querySelector("h2").textContent = `CASHED OUT ${m.m}x 🤑`;
+    overlay.querySelector("p").textContent = paid + ` — crash point was ${m.crashPoint}x. Server seed revealed below for verification.`;
+    multEl.style.color = "var(--green)";
+  } else {
+    overlay.querySelector("h2").textContent = `BUCKED AT ${m.m}x 💀`;
+    overlay.querySelector("p").textContent = (reasons[m.reason] || m.reason) + " Half your entry is burned forever — supply down, try again.";
+    multEl.style.color = "var(--red)";
+    multEl.style.animation = "shake .3s 3";
+    setTimeout(() => (multEl.style.animation = ""), 1000);
+  }
+  $("fair").textContent = "revealed server seed: " + m.serverSeed + " — verify: sha256(seed) === commit shown before the round.";
+  setTimeout(() => { multEl.style.color = "var(--gold)"; multEl.textContent = "1.00x"; multEl.style.fontSize = "84px"; }, 2600);
+  refreshStats();
+}
+</script>
+</body>
+</html>

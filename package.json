@@ -1,0 +1,20 @@
+{
+  "name": "black-bull-rider",
+  "version": "0.1.0",
+  "description": "Skill-based crash game + deflationary utility for $ANSEM. Whack the letters, ride the bull, cash out before it bucks.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "DEV_MODE=1 node server/index.js",
+    "test": "node --test test/*.test.js",
+    "setup:devnet": "node scripts/setup-devnet.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.8",
+    "@solana/web3.js": "^1.95.3",
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
