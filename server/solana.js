@@ -41,6 +41,7 @@ export function initSolana() {
 export function publicInfo() {
   return {
     cluster: CONFIG.cluster,
+    rpcUrl: CONFIG.rpcUrl,
     mint: CONFIG.mint,
     decimals: CONFIG.decimals,
     entryFeeTokens: CONFIG.entryFeeTokens,

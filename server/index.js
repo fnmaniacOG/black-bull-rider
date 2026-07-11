@@ -11,8 +11,37 @@ import { canStart, markStart, markEnd } from "./antibot.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.json());
 app.get("/api/config", (_req, res) => res.json(publicInfo()));
 app.get("/api/stats", async (_req, res) => res.json(await stats()));
+
+// Faucet — surfpool (local mainnet fork) only: give the connected wallet test tokens + SOL.
+app.post("/api/faucet", async (req, res) => {
+  if (CONFIG.cluster !== "surfnet") return res.status(403).json({ ok: false, reason: "faucet_only_on_surfnet" });
+  try {
+    const wallet = String(req.body?.wallet || "");
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) return res.status(400).json({ ok: false, reason: "bad_wallet" });
+    const r = await fetch(CONFIG.rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "surfnet_setTokenAccount",
+        params: [wallet, CONFIG.mint, { amount: 100 * 10 ** CONFIG.decimals, state: "initialized" },
+          "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"]
+      })
+    });
+    const j = await r.json();
+    if (j.error) return res.status(500).json({ ok: false, reason: JSON.stringify(j.error) });
+    await fetch(CONFIG.rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "requestAirdrop", params: [wallet, 2_000_000_000] })
+    });
+    res.json({ ok: true, tokens: 100, sol: 2 });
+  } catch (e) {
+    res.status(500).json({ ok: false, reason: e.message });
+  }
+});
 
 initSolana();
 

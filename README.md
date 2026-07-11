@@ -41,11 +41,20 @@ npm install
 # free-play dev mode (no wallet/tokens needed) — good for recording gameplay
 npm run dev
 
-# devnet launch
-npm run setup:devnet                       # creates test mint + prize wallet + pool
+# RECOMMENDED: surfpool — local mainnet fork, REAL $ANSEM mint, no faucet pain
+# install: brew install txtx/taps/surfpool   (surfpool.run)
+surfpool start                                        # terminal 1: mainnet fork on :8899
+npm run setup:surfpool <YOUR_WALLET_ADDRESS>          # terminal 2: seeds pool + your wallet
+npm start                                             # http://localhost:3000
+# in-app 🚰 FAUCET button tops up any connected wallet (surfnet only)
+# note: the wallet signs, the app broadcasts to the fork — a "can't simulate" warning is expected
+
+# alternative: devnet (test mint, faucet rate limits apply)
+npm run setup:devnet
 node scripts/setup-devnet.js <YOUR_PHANTOM_ADDRESS>   # mints you 1,000 test $ANSEM
-npm start                                  # http://localhost:3000 — Phantom set to Devnet
-npm test                                   # unit tests
+npm start                                             # Phantom set to Devnet
+
+npm test                                              # unit tests
 ```
 
 `config.json` and `.keys/` (prize wallet secret) are gitignored — never commit them.
@@ -59,7 +68,8 @@ server/game.js       round engine: multiplier, spawns, click validation, crash
 server/fair.js       provably-fair crash point + round RNG
 server/antibot.js    behavioral analysis + wallet gating
 server/solana.js     entry-tx verification, payouts, pool/burn stats
-scripts/setup-devnet.js  devnet mint/wallet bootstrap
+scripts/setup-surfpool.js  surfpool bootstrap: real mint on a local mainnet fork (cheatcode funding)
+scripts/setup-devnet.js    devnet bootstrap: test mint + faucet airdrops
 ```
 
 ## Mainnet notes (read before flipping the switch)

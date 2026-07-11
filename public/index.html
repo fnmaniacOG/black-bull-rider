@@ -92,6 +92,7 @@
   <div class="controls">
     <button id="playBtn" disabled>PAY 2 $ANSEM & RIDE</button>
     <button id="cashoutBtn">CASH OUT (SPACE)</button>
+    <button id="faucetBtn" style="display:none;background:#26263a;color:#eaeaf2;border:none;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer;font-size:14px">🚰 FAUCET</button>
   </div>
   <div id="fair"></div>
 </main>
@@ -111,7 +112,13 @@ let running = false, lastMult = 1, mousePath = [];
 init();
 async function init() {
   cfg = await (await fetch("/api/config")).json();
-  $("clusterStat").textContent = cfg.devMode ? "DEV MODE (free play)" : cfg.cluster;
+  $("clusterStat").textContent = cfg.devMode ? "DEV MODE (free play)" : cfg.cluster === "surfnet" ? "surfpool (mainnet fork)" : cfg.cluster;
+  if (cfg.cluster === "surfnet" && !cfg.devMode) $("faucetBtn").style.display = "inline-block";
+  $("faucetBtn").onclick = async () => {
+    if (!wallet) return alert("Connect your wallet first.");
+    const r = await (await fetch("/api/faucet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wallet }) })).json();
+    statusEl.textContent = r.ok ? `🚰 Faucet: +${r.tokens} $ANSEM, +${r.sol} SOL` : "Faucet failed: " + r.reason;
+  };
   refreshStats(); setInterval(refreshStats, 8000);
   openSocket();
   if (cfg.devMode) { wallet = "dev-" + Math.random().toString(36).slice(2, 10); onConnected(); }
@@ -188,8 +195,13 @@ function burnCheckedIx(srcAta, mint, owner, amount, decimals) {
   });
 }
 
+function rpcUrl() {
+  if (cfg.rpcUrl) return cfg.rpcUrl;
+  return cfg.cluster === "devnet" ? "https://api.devnet.solana.com" : "https://api.mainnet-beta.solana.com";
+}
+
 async function payEntry() {
-  const conn = new Connection(cfg.cluster === "devnet" ? "https://api.devnet.solana.com" : "https://api.mainnet-beta.solana.com", "confirmed");
+  const conn = new Connection(rpcUrl(), "confirmed");
   const owner = new PublicKey(wallet);
   const mint = new PublicKey(cfg.mint);
   const half = BigInt(cfg.entryFeeTokens) * BigInt(10 ** cfg.decimals) / 2n;
@@ -202,7 +214,16 @@ async function payEntry() {
   );
   tx.feePayer = owner;
   tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
-  const { signature } = await provider.signAndSendTransaction(tx);
+
+  let signature;
+  if (cfg.cluster === "surfnet") {
+    // local mainnet fork: the wallet can't broadcast to localhost, so it signs
+    // and WE send the raw tx to the fork. (Wallet may warn "can't simulate" — expected.)
+    const signed = await provider.signTransaction(tx);
+    signature = await conn.sendRawTransaction(signed.serialize(), { skipPreflight: true });
+  } else {
+    ({ signature } = await provider.signAndSendTransaction(tx));
+  }
   statusEl.textContent = "Confirming entry tx (1 → pool, 1 → 🔥)…";
   await conn.confirmTransaction(signature, "confirmed");
   return signature;

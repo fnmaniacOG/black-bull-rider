@@ -8,7 +8,8 @@
     "start": "node server/index.js",
     "dev": "DEV_MODE=1 node server/index.js",
     "test": "node --test test/*.test.js",
-    "setup:devnet": "node scripts/setup-devnet.js"
+    "setup:devnet": "node scripts/setup-devnet.js",
+    "setup:surfpool": "node scripts/setup-surfpool.js"
   },
   "engines": { "node": ">=18" },
   "dependencies": {
