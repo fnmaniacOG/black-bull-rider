@@ -60,8 +60,36 @@ async function main() {
     console.log("Created prize wallet:", prize.publicKey.toBase58());
   }
 
-  // 2. real mint metadata from the fork
-  const mintInfo = await getMint(conn, new PublicKey(ANSEM_MINT));
+  // 2. real mint metadata from the fork.
+  // Surfpool lazy-fetches mainnet accounts through its datasource RPC; the default
+  // public mainnet RPC rate-limits, so retry, then fail with a clear fix.
+  let mintInfo = null;
+  for (let i = 0; i < 6; i++) {
+    try {
+      mintInfo = await getMint(conn, new PublicKey(ANSEM_MINT));
+      break;
+    } catch (e) {
+      if (i < 5) {
+        console.log(`Mint not loaded yet (${e.constructor?.name || e.message}) — retrying in 3s… [${i + 1}/5]`);
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
+  }
+  if (!mintInfo) {
+    const acc = await conn.getAccountInfo(new PublicKey(ANSEM_MINT));
+    console.error(`
+❌ The fork can't load the real $ANSEM mint (account owner: ${acc?.owner?.toBase58() ?? "not found"}).
+   This means surfpool's mainnet datasource RPC is failing/rate-limited (the default public one usually is).
+
+   Fix: restart surfpool with a real mainnet RPC endpoint, e.g. a free Helius key:
+
+     surfpool start --rpc-url "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+
+   (any mainnet RPC provider works — Helius/QuickNode/Triton free tiers are fine)
+   Then re-run: npm run setup:surfpool <YOUR_WALLET_ADDRESS>
+`);
+    process.exit(1);
+  }
   const decimals = mintInfo.decimals;
   console.log(`Real $ANSEM mint loaded from fork — decimals: ${decimals}, supply: ${mintInfo.supply}`);
 
