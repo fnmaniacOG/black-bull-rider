@@ -9,7 +9,8 @@ services:
       - key: CLUSTER
         value: devnet
       - key: RPC_URL
-        value: https://api.devnet.solana.com
+        sync: false # use a dedicated devnet RPC, e.g. https://devnet.helius-rpc.com/?api-key=KEY
+                    # (the public api.devnet.solana.com rate-limits hard)
       - key: MINT
         sync: false # your devnet test mint address (from config.json after npm run setup:devnet)
       - key: DECIMALS

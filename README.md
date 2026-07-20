@@ -77,7 +77,10 @@ scripts/setup-devnet.js    devnet bootstrap: test mint + faucet airdrops
 GitHub Pages can't host this — it only serves static files, and the game needs the Node
 backend. Deploy the whole app (one service) to Render's free tier instead:
 
-1. Locally: `npm run setup:devnet` → note the test mint address in `config.json`.
+1. Locally: `RPC_URL="https://devnet.helius-rpc.com/?api-key=KEY" npm run setup:devnet`
+   (get a free key at helius.dev — the public devnet RPC rate-limits hard) → note the
+   test mint address in `config.json`. If the SOL airdrop fails, fund the prize wallet
+   at faucet.solana.com and re-run.
 2. Push this repo to GitHub. On [render.com](https://render.com): New → Blueprint → pick the repo
    (`render.yaml` configures everything).
 3. Set the two secrets when prompted: `MINT` (test mint address) and `PRIZE_WALLET_SECRET`
