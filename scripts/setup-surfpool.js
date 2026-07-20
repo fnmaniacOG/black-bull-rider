@@ -17,7 +17,7 @@ const ROOT = path.join(__dirname, "..");
 const KEYS_DIR = path.join(ROOT, ".keys");
 const RPC = process.env.RPC_URL || "http://127.0.0.1:8899";
 const ANSEM_MINT = "9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump"; // real mainnet mint
-const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+let TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"; // auto-detected from the mint (may be Token-2022)
 
 const conn = new Connection(RPC, "confirmed");
 
@@ -61,37 +61,32 @@ async function main() {
   }
 
   // 2. real mint metadata from the fork.
-  // Surfpool lazy-fetches mainnet accounts through its datasource RPC; the default
-  // public mainnet RPC rate-limits, so retry, then fail with a clear fix.
-  let mintInfo = null;
+  // Surfpool lazy-fetches mainnet accounts through its datasource RPC — retry while it loads.
+  // The mint's OWNER tells us which token program it uses (legacy SPL vs Token-2022);
+  // $ANSEM is Token-2022, so we auto-detect instead of assuming.
+  let acc = null;
   for (let i = 0; i < 6; i++) {
-    try {
-      mintInfo = await getMint(conn, new PublicKey(ANSEM_MINT));
-      break;
-    } catch (e) {
-      if (i < 5) {
-        console.log(`Mint not loaded yet (${e.constructor?.name || e.message}) — retrying in 3s… [${i + 1}/5]`);
-        await new Promise((r) => setTimeout(r, 3000));
-      }
-    }
+    acc = await conn.getAccountInfo(new PublicKey(ANSEM_MINT));
+    if (acc) break;
+    console.log(`Mint not loaded from mainnet yet — retrying in 3s… [${i + 1}/5]`);
+    await new Promise((r) => setTimeout(r, 3000));
   }
-  if (!mintInfo) {
-    const acc = await conn.getAccountInfo(new PublicKey(ANSEM_MINT));
+  if (!acc) {
     console.error(`
-❌ The fork can't load the real $ANSEM mint (account owner: ${acc?.owner?.toBase58() ?? "not found"}).
-   This means surfpool's mainnet datasource RPC is failing/rate-limited (the default public one usually is).
-
-   Fix: restart surfpool with a real mainnet RPC endpoint, e.g. a free Helius key:
+❌ The fork can't load the real $ANSEM mint at all — surfpool's mainnet datasource RPC
+   is failing/rate-limited. Restart surfpool with a solid mainnet RPC, e.g.:
 
      surfpool start --rpc-url "https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
 
-   (any mainnet RPC provider works — Helius/QuickNode/Triton free tiers are fine)
    Then re-run: npm run setup:surfpool <YOUR_WALLET_ADDRESS>
 `);
     process.exit(1);
   }
+  TOKEN_PROGRAM = acc.owner.toBase58();
+  const is2022 = TOKEN_PROGRAM.startsWith("Tokenz");
+  const mintInfo = await getMint(conn, new PublicKey(ANSEM_MINT), "confirmed", acc.owner);
   const decimals = mintInfo.decimals;
-  console.log(`Real $ANSEM mint loaded from fork — decimals: ${decimals}, supply: ${mintInfo.supply}`);
+  console.log(`Real $ANSEM mint loaded — ${is2022 ? "Token-2022" : "legacy SPL Token"}, decimals: ${decimals}, supply: ${mintInfo.supply}`);
 
   // 3. SOL for fees (surfpool airdrops freely on the fork)
   const sig = await conn.requestAirdrop(prize.publicKey, 10 * LAMPORTS_PER_SOL);
@@ -100,7 +95,7 @@ async function main() {
 
   // 4. seed the prize pool with 500 real $ANSEM (cheatcode — creates the ATA too)
   await giveTokens(prize.publicKey.toBase58(), 500, decimals);
-  const poolAta = getAssociatedTokenAddressSync(new PublicKey(ANSEM_MINT), prize.publicKey);
+  const poolAta = getAssociatedTokenAddressSync(new PublicKey(ANSEM_MINT), prize.publicKey, false, acc.owner);
   console.log("Prize pool ATA seeded with 500 $ANSEM:", poolAta.toBase58());
 
   // 5. fund a player wallet, if provided
@@ -117,6 +112,7 @@ async function main() {
     cluster: "surfnet",
     rpcUrl: RPC,
     mint: ANSEM_MINT,
+    tokenProgram: TOKEN_PROGRAM,
     decimals,
     prizeWalletKeypairPath: kpPath,
     devMode: false,

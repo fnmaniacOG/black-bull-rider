@@ -99,7 +99,7 @@
 
 <script>
 const { Connection, PublicKey, Transaction, TransactionInstruction } = solanaWeb3;
-const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+let TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"); // updated from server config (Token-2022 for real $ANSEM)
 const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 const $ = (id) => document.getElementById(id);
@@ -112,6 +112,7 @@ let running = false, lastMult = 1, mousePath = [];
 init();
 async function init() {
   cfg = await (await fetch("/api/config")).json();
+  if (cfg.tokenProgram) TOKEN_PROGRAM = new PublicKey(cfg.tokenProgram);
   $("clusterStat").textContent = cfg.devMode ? "DEV MODE (free play)" : cfg.cluster === "surfnet" ? "surfpool (mainnet fork)" : cfg.cluster;
   if (cfg.cluster === "surfnet" && !cfg.devMode) $("faucetBtn").style.display = "inline-block";
   $("faucetBtn").onclick = async () => {

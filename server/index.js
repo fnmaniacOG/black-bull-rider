@@ -27,7 +27,7 @@ app.post("/api/faucet", async (req, res) => {
       body: JSON.stringify({
         jsonrpc: "2.0", id: 1, method: "surfnet_setTokenAccount",
         params: [wallet, CONFIG.mint, { amount: 100 * 10 ** CONFIG.decimals, state: "initialized" },
-          "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"]
+          CONFIG.tokenProgram]
       })
     });
     const j = await r.json();

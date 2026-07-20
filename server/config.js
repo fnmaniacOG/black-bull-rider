@@ -19,6 +19,8 @@ export const CONFIG = {
   cluster: process.env.CLUSTER || fileCfg.cluster || "devnet",
   // Mainnet $ANSEM mint (for reference / mainnet launch): 9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump
   mint: process.env.MINT || fileCfg.mint || null,
+  // legacy SPL Token by default; Token-2022 mints (like real $ANSEM) auto-detected by setup scripts
+  tokenProgram: process.env.TOKEN_PROGRAM || fileCfg.tokenProgram || "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   decimals: fileCfg.decimals ?? 6,
   prizeWalletKeypairPath:
     process.env.PRIZE_WALLET_KEYPAIR || fileCfg.prizeWalletKeypairPath || path.join(ROOT, ".keys", "prize-wallet.json"),

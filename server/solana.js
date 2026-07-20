@@ -17,6 +17,7 @@ let connection = null;
 let prizeKeypair = null;
 let mintPk = null;
 let prizeAta = null;
+let tokenProgramPk = null;
 
 const usedEntrySigs = new Set(); // replay protection
 let totalBurnedBaseUnits = 0n;   // observed via verified entries
@@ -32,7 +33,8 @@ export function initSolana() {
   prizeKeypair = Keypair.fromSecretKey(
     Uint8Array.from(JSON.parse(fs.readFileSync(CONFIG.prizeWalletKeypairPath, "utf8")))
   );
-  prizeAta = getAssociatedTokenAddressSync(mintPk, prizeKeypair.publicKey);
+  tokenProgramPk = new PublicKey(CONFIG.tokenProgram);
+  prizeAta = getAssociatedTokenAddressSync(mintPk, prizeKeypair.publicKey, false, tokenProgramPk);
   console.log(`[solana] cluster=${CONFIG.cluster} mint=${CONFIG.mint}`);
   console.log(`[solana] prize wallet=${prizeKeypair.publicKey.toBase58()} ata=${prizeAta.toBase58()}`);
   return { chainEnabled: true };
@@ -43,6 +45,7 @@ export function publicInfo() {
     cluster: CONFIG.cluster,
     rpcUrl: CONFIG.rpcUrl,
     mint: CONFIG.mint,
+    tokenProgram: CONFIG.tokenProgram,
     decimals: CONFIG.decimals,
     entryFeeTokens: CONFIG.entryFeeTokens,
     payoutBaseTokens: CONFIG.payoutBaseTokens,
@@ -121,10 +124,10 @@ export async function payout(playerWallet, tokens) {
   if (amount > cap) amount = cap;
   if (amount <= 0n) return { ok: false, reason: "pool_empty" };
 
-  const playerAta = getAssociatedTokenAddressSync(mintPk, player);
+  const playerAta = getAssociatedTokenAddressSync(mintPk, player, false, tokenProgramPk);
   const txn = new Transaction().add(
-    createAssociatedTokenAccountIdempotentInstruction(prizeKeypair.publicKey, playerAta, player, mintPk),
-    createTransferCheckedInstruction(prizeAta, mintPk, playerAta, prizeKeypair.publicKey, amount, CONFIG.decimals)
+    createAssociatedTokenAccountIdempotentInstruction(prizeKeypair.publicKey, playerAta, player, mintPk, tokenProgramPk),
+    createTransferCheckedInstruction(prizeAta, mintPk, playerAta, prizeKeypair.publicKey, amount, CONFIG.decimals, [], tokenProgramPk)
   );
   const sig = await sendAndConfirmTransaction(connection, txn, [prizeKeypair]);
   return { ok: true, signature: sig, amountBaseUnits: amount.toString() };
