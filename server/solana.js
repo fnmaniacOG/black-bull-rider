@@ -71,9 +71,19 @@ export async function verifyEntryTx(signature, playerWallet) {
   });
   if (!tx) return { ok: false, reason: "tx_not_found" };
   if (tx.meta?.err) return { ok: false, reason: "tx_failed" };
-  if (!tx.blockTime || Date.now() / 1000 - tx.blockTime > CONFIG.antibot.txMaxAgeSec) {
-    return { ok: false, reason: "tx_too_old" };
+  // Freshness: prefer blockTime; some local validators (surfpool) don't return it,
+  // so fall back to slot distance (~2.5 slots/sec → txMaxAgeSec * 2.5 slots).
+  if (tx.blockTime) {
+    if (Date.now() / 1000 - tx.blockTime > CONFIG.antibot.txMaxAgeSec) {
+      return { ok: false, reason: "tx_too_old" };
+    }
+  } else if (typeof tx.slot === "number") {
+    const currentSlot = await connection.getSlot("confirmed");
+    if (currentSlot - tx.slot > CONFIG.antibot.txMaxAgeSec * 2.5) {
+      return { ok: false, reason: "tx_too_old" };
+    }
   }
+  // (replay protection above is the primary defense — each signature is single-use)
 
   const half = halfFeeBaseUnits();
   let paidToPool = false;
