@@ -16,23 +16,28 @@ export class BehaviorMonitor {
     this.flags = [];
   }
 
-  recordWhack({ reactionMs, path }) {
-    this.total++;
+  recordWhack({ reactionMs, path, viaKey = false }) {
     this.reactions.push(reactionMs);
 
     if (reactionMs < this.cfg.minReactionMs) {
       this.flags.push(`subhuman_reaction:${reactionMs}ms`);
     }
 
-    const moved = Array.isArray(path) && pathDistance(path) > 30;
-    if (!moved) this.pathless++;
+    // mouse-path telemetry only applies to clicks — key hits have no cursor path
+    if (!viaKey) {
+      this.total++;
+      const moved = Array.isArray(path) && pathDistance(path) > 30;
+      if (!moved) this.pathless++;
+    }
 
-    if (this.total >= this.cfg.minSamplesForStats) {
+    if (this.reactions.length >= this.cfg.minSamplesForStats) {
       const med = median(this.reactions);
       const sd = stdDev(this.reactions);
       if (med < this.cfg.medianReactionFloorMs) this.flags.push(`median_reaction:${med.toFixed(0)}ms`);
       if (sd < this.cfg.stdDevFloorMs) this.flags.push(`robotic_consistency:sd=${sd.toFixed(1)}ms`);
-      if (this.pathless / this.total > this.cfg.maxPathlessRatio) this.flags.push("teleporting_cursor");
+      if (this.total >= this.cfg.minSamplesForStats && this.pathless / this.total > this.cfg.maxPathlessRatio) {
+        this.flags.push("teleporting_cursor");
+      }
     }
     return this.flags.length === 0;
   }

@@ -14,7 +14,7 @@ export function commitment(serverSeed) {
   return crypto.createHash("sha256").update(serverSeed).digest("hex");
 }
 
-export function crashPoint(serverSeed, clientSeed, nonce, houseEdge, maxMultiplier = 50) {
+export function crashPoint(serverSeed, clientSeed, nonce, houseEdge, maxMultiplier = 50, minCrash = 1.0) {
   const hmac = crypto
     .createHmac("sha256", serverSeed)
     .update(`${clientSeed}:${nonce}`)
@@ -22,7 +22,7 @@ export function crashPoint(serverSeed, clientSeed, nonce, houseEdge, maxMultipli
   // 52 bits of the hmac -> uniform r in [0,1)
   const r = parseInt(hmac.slice(0, 13), 16) / 2 ** 52;
   const raw = (1 - houseEdge) / (1 - r);
-  const point = Math.max(1.0, Math.floor(raw * 100) / 100);
+  const point = Math.max(minCrash, Math.floor(raw * 100) / 100);
   return Math.min(point, maxMultiplier);
 }
 

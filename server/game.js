@@ -6,7 +6,7 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const SHAPES = ["circle", "square", "hex", "diamond", "star"];
 const COLORS = ["#ff5252", "#ffb300", "#00e676", "#40c4ff", "#e040fb", "#ffee58", "#ff6e40", "#69f0ae"];
 const LATENCY_GRACE_MS = 250;
-const CLICK_RADIUS_GRACE_PX = 30;
+const CLICK_RADIUS_GRACE_PX = 45;
 
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -31,7 +31,7 @@ export class Round {
 
     this.serverSeed = newServerSeed();
     this.commit = commitment(this.serverSeed);
-    this.crashAt = crashPoint(this.serverSeed, this.clientSeed, this.nonce, cfg.houseEdge, cfg.maxMultiplier);
+    this.crashAt = crashPoint(this.serverSeed, this.clientSeed, this.nonce, cfg.houseEdge, cfg.maxMultiplier, cfg.minCrashPoint ?? 1.0);
     this.rng = roundRng(this.serverSeed, this.clientSeed, this.nonce);
 
     this.state = "ready"; // ready -> running -> ended
@@ -55,7 +55,9 @@ export class Round {
       this.send({ type: "tick", m: round2(m) });
     }, this.cfg.tickMs);
 
-    this.scheduleSpawn();
+    // first letter comes fast so there's always gameplay before any crash
+    const f = this.cfg.spawn.firstSpawnMs || [600, 1100];
+    this.scheduleSpawn(lerp(f[0], f[1], this.rng()));
   }
 
   multiplier(now = Date.now()) {
@@ -70,11 +72,11 @@ export class Round {
 
   // ---- spawning ----
 
-  scheduleSpawn() {
+  scheduleSpawn(delayOverride = null) {
     if (this.state !== "running") return;
     const s = this.cfg.spawn;
     const d = this.difficulty();
-    const delay = lerp(
+    const delay = delayOverride ?? lerp(
       lerp(s.startDelayMs[0], s.endDelayMs[0], d),
       lerp(s.startDelayMs[1], s.endDelayMs[1], d),
       this.rng()
@@ -128,30 +130,47 @@ export class Round {
 
   // ---- input ----
 
-  handleWhack({ id, x, y, path }) {
+  // Click anywhere in the arena — the SERVER decides what was hit, using true
+  // target geometry. (CSS clip-path shapes have deceptive hit areas client-side.)
+  handleClick({ x, y, path }) {
     if (this.state !== "running") return;
-    const tg = this.targets.get(id);
-    if (!tg || tg.whacked) return; // stale/duplicate click — ignore
     const now = Date.now();
-    if (now > tg.spawnedAt + tg.ttl + LATENCY_GRACE_MS) return; // too late; expiry timer decides
+    let best = null;
+    let bestDist = Infinity;
+    for (const tg of this.targets.values()) {
+      if (tg.whacked || now > tg.spawnedAt + tg.ttl + LATENCY_GRACE_MS) continue;
+      const dist = Math.hypot((x ?? -1e4) - tg.x * this.arena.w, (y ?? -1e4) - tg.y * this.arena.h);
+      if (dist <= tg.size / 2 + CLICK_RADIUS_GRACE_PX && dist < bestDist) {
+        best = tg;
+        bestDist = dist;
+      }
+    }
+    if (!best) return this.send({ type: "miss", x, y }); // swung and hit air
+    this.registerHit(best, now, path, false);
+  }
 
-    // click must actually land on the target (server knows the true position)
-    const cx = tg.x * this.arena.w;
-    const cy = tg.y * this.arena.h;
-    const dist = Math.hypot((x ?? -1e4) - cx, (y ?? -1e4) - cy);
-    if (dist > tg.size / 2 + CLICK_RADIUS_GRACE_PX) return; // didn't hit it
+  // Typing the letter is an alternative to clicking (bombs show 💣, so keys can't hit them)
+  handleKey({ letter, path }) {
+    if (this.state !== "running" || typeof letter !== "string") return;
+    const now = Date.now();
+    const L = letter.toUpperCase();
+    for (const tg of this.targets.values()) {
+      if (!tg.isDecoy && !tg.whacked && tg.letter === L && now <= tg.spawnedAt + tg.ttl + LATENCY_GRACE_MS) {
+        return this.registerHit(tg, now, path, true);
+      }
+    }
+  }
 
+  registerHit(tg, now, path, viaKey) {
     if (tg.isDecoy) {
       tg.whacked = true;
       return this.crash("hit_bomb");
     }
-
     const reactionMs = now - tg.spawnedAt;
-    const humanOk = this.monitor.recordWhack({ reactionMs, path });
+    const humanOk = this.monitor.recordWhack({ reactionMs, path, viaKey });
     tg.whacked = true;
-    this.targets.delete(id);
-    this.send({ type: "whacked", id, reactionMs });
-
+    this.targets.delete(tg.id);
+    this.send({ type: "whacked", id: tg.id, reactionMs });
     if (!humanOk) return this.crash("bot_flagged");
   }
 

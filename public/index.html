@@ -244,7 +244,33 @@ $("playBtn").onclick = async () => {
   }
 };
 $("cashoutBtn").onclick = () => send({ type: "cashout" });
-document.addEventListener("keydown", (e) => { if (e.code === "Space" && running) { e.preventDefault(); send({ type: "cashout" }); } });
+document.addEventListener("keydown", (e) => {
+  if (!running) return;
+  if (e.code === "Space") { e.preventDefault(); send({ type: "cashout" }); return; }
+  if (/^Key[A-Z]$/.test(e.code)) send({ type: "key", letter: e.code.slice(3) }); // type the letter to whack it
+});
+
+// whole arena is clickable — the server decides what you hit (true geometry lives there)
+arena.addEventListener("pointerdown", (ev) => {
+  if (!running) return;
+  const r = arena.getBoundingClientRect();
+  const x = ev.clientX - r.left, y = ev.clientY - r.top;
+  send({ type: "click", x, y, path: mousePath });
+  mousePath = [];
+  ripple(x, y, "rgba(255,255,255,.35)");
+});
+
+function ripple(x, y, color) {
+  const el = document.createElement("div");
+  Object.assign(el.style, {
+    position: "absolute", left: x - 14 + "px", top: y - 14 + "px", width: "28px", height: "28px",
+    borderRadius: "50%", border: `3px solid ${color}`, pointerEvents: "none", zIndex: 15,
+    transition: "transform .3s ease-out, opacity .3s", transform: "scale(1)", opacity: "1"
+  });
+  arena.appendChild(el);
+  requestAnimationFrame(() => { el.style.transform = "scale(2.2)"; el.style.opacity = "0"; });
+  setTimeout(() => el.remove(), 320);
+}
 
 // mouse telemetry (anti-bot): sampled path since the last whack
 arena.addEventListener("mousemove", (e) => {
@@ -263,7 +289,7 @@ function handle(m) {
       running = true; lastMult = 1;
       $("playBtn").style.display = "none";
       $("cashoutBtn").style.display = "inline-block";
-      statusEl.textContent = "WHACK every letter before it fades. DON'T touch the 💣 bombs. Cash out any time!";
+      statusEl.textContent = "WHACK every letter — click it or TYPE it on your keyboard. DON'T touch the 💣 bombs. SPACE = cash out!";
       break;
     case "tick":
       lastMult = m.m;
@@ -276,9 +302,17 @@ function handle(m) {
     case "despawn": document.getElementById("t-" + m.id)?.remove(); break;
     case "whacked": {
       const el = document.getElementById("t-" + m.id);
-      if (el) { el.style.transition = "transform .12s, opacity .12s"; el.style.transform += " scale(1.6)"; el.style.opacity = "0"; setTimeout(() => el.remove(), 130); }
+      if (el) {
+        const rr = el.getBoundingClientRect(), ar = arena.getBoundingClientRect();
+        ripple(rr.left - ar.left + rr.width / 2, rr.top - ar.top + rr.height / 2, "var(--gold)");
+        el.style.transition = "transform .12s, opacity .12s";
+        el.style.transform += " scale(1.6)";
+        el.style.opacity = "0";
+        setTimeout(() => el.remove(), 130);
+      }
       break;
     }
+    case "miss": break; // click hit air — white ripple already shown locally
     case "crashed": endRound(false, m); break;
     case "cashed_out": endRound(true, m); break;
     case "error":
@@ -308,12 +342,7 @@ function spawnTarget(t) {
     ring.className = "shrink"; ring.style.animationDuration = t.ttl + "ms";
     el.appendChild(ring);
   }
-  el.addEventListener("pointerdown", (ev) => {
-    ev.stopPropagation();
-    const rr = arena.getBoundingClientRect();
-    send({ type: "whack", id: t.id, x: ev.clientX - rr.left, y: ev.clientY - rr.top, path: mousePath });
-    mousePath = [];
-  });
+  el.style.pointerEvents = "none"; // arena handles all clicks; server decides hits
   arena.appendChild(el);
   setTimeout(() => el.remove(), t.ttl + 300);
 }

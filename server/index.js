@@ -110,13 +110,16 @@ wss.on("connection", (ws) => {
           break;
         }
 
-        case "whack":
-          round?.handleWhack({
-            id: String(msg.id || ""),
+        case "click":
+          round?.handleClick({
             x: Number(msg.x),
             y: Number(msg.y),
             path: Array.isArray(msg.path) ? msg.path.slice(0, 80) : []
           });
+          break;
+
+        case "key":
+          round?.handleKey({ letter: String(msg.letter || "").slice(0, 1) });
           break;
 
         case "cashout":

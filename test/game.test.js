@@ -19,17 +19,22 @@ test("crash point is deterministic for same seeds/nonce", () => {
   assert.notEqual(crashPoint(seed, "abc", 1, 0.04), crashPoint(seed, "abc", 2, 0.04));
 });
 
-test("crash point distribution: min 1.00, house edge ≈ instant-crash rate", () => {
+test("crash point distribution respects floor, cap, and edge", () => {
   const seed = newServerSeed();
-  let instant = 0;
+  let atFloor = 0;
   const N = 20000;
   for (let i = 0; i < N; i++) {
-    const c = crashPoint(seed, "dist", i, 0.04);
-    assert.ok(c >= 1.0 && c <= CONFIG.maxMultiplier);
-    if (c === 1.0) instant++;
+    const c = crashPoint(seed, "dist", i, 0.04, CONFIG.maxMultiplier, CONFIG.minCrashPoint);
+    assert.ok(c >= CONFIG.minCrashPoint && c <= CONFIG.maxMultiplier);
+    if (c === CONFIG.minCrashPoint) atFloor++;
   }
-  const rate = instant / N;
-  assert.ok(rate > 0.02 && rate < 0.07, `instant crash rate ${rate} should be ~0.04`);
+  // P(raw < 1.5) = 1 - 0.96/1.5 = 0.36 — rounds lumped at the floor
+  const rate = atFloor / N;
+  assert.ok(rate > 0.3 && rate < 0.42, `floor rate ${rate} should be ~0.36`);
+  // without a floor, min is 1.0 and instant crashes ≈ edge
+  let instant = 0;
+  for (let i = 0; i < N; i++) if (crashPoint(seed, "nf", i, 0.04) === 1.0) instant++;
+  assert.ok(instant / N > 0.02 && instant / N < 0.07);
 });
 
 test("round rng is deterministic and uniform-ish", () => {
@@ -116,33 +121,45 @@ test("round exposes commit before start, crash reveals matching seed", () => {
   assert.equal(r.state, "ended");
 });
 
-test("whack on decoy crashes; whack outside target radius is ignored", () => {
+test("click on decoy crashes; click on empty air is a miss", () => {
   const msgs = [];
   const r = makeRound(msgs);
   r.start();
   // inject a known decoy
-  r.targets.set("d1", { id: "d1", isDecoy: true, x: 0.5, y: 0.5, size: 80, ttl: 5000, spawnedAt: Date.now(), whacked: false });
-  // click far away -> ignored
-  r.handleWhack({ id: "d1", x: 10, y: 10, path: [] });
+  r.targets.set("d1", { id: "d1", letter: "?", isDecoy: true, x: 0.5, y: 0.5, size: 80, ttl: 5000, spawnedAt: Date.now(), whacked: false });
+  // click far away -> miss, round continues
+  r.handleClick({ x: 10, y: 10, path: [] });
   assert.equal(r.state, "running");
+  assert.ok(msgs.some((m) => m.type === "miss"));
   // click on it -> crash
-  r.handleWhack({ id: "d1", x: 400, y: 250, path: [] });
+  r.handleClick({ x: 400, y: 250, path: [] });
   assert.equal(r.state, "ended");
   assert.equal(msgs.find((m) => m.type === "crashed").reason, "hit_bomb");
 });
 
-test("valid whack succeeds; late whack ignored", async () => {
+test("valid click whacks nearest target; expired target unhittable; typing letter works", async () => {
   const msgs = [];
   const r = makeRound(msgs);
   r.start();
   const now = Date.now();
-  r.targets.set("t1", { id: "t1", isDecoy: false, x: 0.5, y: 0.5, size: 80, ttl: 1000, spawnedAt: now - 300, whacked: false });
-  r.targets.set("t2", { id: "t2", isDecoy: false, x: 0.5, y: 0.5, size: 80, ttl: 100, spawnedAt: now - 5000, whacked: false });
-  r.handleWhack({ id: "t2", x: 400, y: 250, path: fakePath(100) }); // expired
+  r.targets.set("t1", { id: "t1", letter: "Q", isDecoy: false, x: 0.5, y: 0.5, size: 80, ttl: 1000, spawnedAt: now - 300, whacked: false });
+  r.targets.set("t2", { id: "t2", letter: "Z", isDecoy: false, x: 0.9, y: 0.9, size: 80, ttl: 100, spawnedAt: now - 5000, whacked: false });
+  r.handleClick({ x: 720, y: 450, path: fakePath(100) }); // near expired t2 -> miss
   assert.ok(!msgs.some((m) => m.type === "whacked"));
-  r.handleWhack({ id: "t1", x: 405, y: 245, path: fakePath(100) });
+  r.handleClick({ x: 405, y: 245, path: fakePath(100) }); // hits t1
   assert.ok(msgs.some((m) => m.type === "whacked" && m.id === "t1"));
+  // typing: add a fresh letter and hit it via keyboard
+  r.targets.set("t3", { id: "t3", letter: "K", isDecoy: false, x: 0.2, y: 0.2, size: 80, ttl: 2000, spawnedAt: Date.now() - 400, whacked: false });
+  r.handleKey({ letter: "k" });
+  assert.ok(msgs.some((m) => m.type === "whacked" && m.id === "t3"));
   r.crash("test_cleanup");
+});
+
+test("key-only play does not trip the teleporting-cursor flag", () => {
+  const m = new BehaviorMonitor(CONFIG.antibot);
+  const rts = [310, 420, 275, 505, 360, 445, 290, 380, 520, 335];
+  for (const rt of rts) assert.equal(m.recordWhack({ reactionMs: rt, path: [], viaKey: true }), true);
+  assert.equal(m.flagged, false);
 });
 
 test("cashout returns multiplier and ends round; flagged player cannot cash out", () => {

@@ -30,6 +30,8 @@ export const CONFIG = {
   // half goes to prize pool, half is burned — enforced when verifying the entry tx
   payoutBaseTokens: 1,      // payout = payoutBaseTokens * multiplier
   houseEdge: 0.04,          // 4% edge baked into crash point distribution
+  minCrashPoint: 1.5,       // crash point floor — guarantees ~4.7s of gameplay every round
+                            // (house edge comes mostly from skill failures: misses & bombs)
   maxPayoutPoolFraction: 0.25, // single payout can never exceed 25% of pool balance
 
   // --- game feel ---
@@ -37,6 +39,7 @@ export const CONFIG = {
   multiplierDoubleEverySec: 8,    // m(t) = 2^(t/8)
   maxMultiplier: 50,
   spawn: {
+    firstSpawnMs: [600, 1100],    // first letter appears fast — gameplay before any crash
     startDelayMs: [1500, 2400],   // spawn interval range at 1.00x
     endDelayMs: [520, 900],       // spawn interval range at high multiplier
     startTtlMs: 1900,             // time allowed to whack, at 1.00x

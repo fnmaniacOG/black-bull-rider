@@ -23,8 +23,8 @@ const usedEntrySigs = new Set(); // replay protection
 let totalBurnedBaseUnits = 0n;   // observed via verified entries
 
 export function initSolana() {
-  if (CONFIG.devMode && !CONFIG.mint) {
-    console.log("[solana] DEV_MODE without mint — chain checks disabled (free play).");
+  if (CONFIG.devMode) {
+    console.log("[solana] DEV_MODE — chain checks disabled (free play).");
     return { chainEnabled: false };
   }
   if (!CONFIG.mint) throw new Error("No mint configured. Run `npm run setup:devnet` first.");
