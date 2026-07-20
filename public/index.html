@@ -93,6 +93,7 @@
     <button id="playBtn" disabled>PAY 2 $ANSEM & RIDE</button>
     <button id="cashoutBtn">CASH OUT (SPACE)</button>
     <button id="faucetBtn" style="display:none;background:#26263a;color:#eaeaf2;border:none;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer;font-size:14px">🚰 FAUCET</button>
+    <button id="burnerBtn" style="display:none;background:#26263a;color:#ffb300;border:1px solid #ffb300;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer;font-size:14px">⚡ BURNER (no popups)</button>
   </div>
   <div id="fair"></div>
 </main>
@@ -105,7 +106,7 @@ const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 const $ = (id) => document.getElementById(id);
 const arena = $("arena"), multEl = $("multiplier"), overlay = $("overlay"), statusEl = $("status");
 
-let cfg = null, ws = null, provider = null, wallet = null;
+let cfg = null, ws = null, provider = null, wallet = null, burnerKp = null;
 let running = false, lastMult = 1, mousePath = [];
 
 // ---------- boot ----------
@@ -114,7 +115,26 @@ async function init() {
   cfg = await (await fetch("/api/config")).json();
   if (cfg.tokenProgram) TOKEN_PROGRAM = new PublicKey(cfg.tokenProgram);
   $("clusterStat").textContent = cfg.devMode ? "DEV MODE (free play)" : cfg.cluster === "surfnet" ? "surfpool (mainnet fork)" : cfg.cluster;
-  if (cfg.cluster === "surfnet" && !cfg.devMode) $("faucetBtn").style.display = "inline-block";
+  if (cfg.cluster === "surfnet" && !cfg.devMode) {
+    $("faucetBtn").style.display = "inline-block";
+    $("burnerBtn").style.display = "inline-block";
+  }
+  // Burner wallet (surfnet only): local keypair signs instantly — no Phantom popup.
+  // Phantom is slow on the fork because it tries (and fails) to simulate against real mainnet.
+  $("burnerBtn").onclick = async () => {
+    let sk = localStorage.getItem("bbr-burner");
+    if (!sk) {
+      sk = JSON.stringify([...solanaWeb3.Keypair.generate().secretKey]);
+      localStorage.setItem("bbr-burner", sk);
+    }
+    burnerKp = solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(JSON.parse(sk)));
+    wallet = burnerKp.publicKey.toBase58();
+    onConnected();
+    $("burnerBtn").style.background = "#ffb300";
+    $("burnerBtn").style.color = "#14141d";
+    await $("faucetBtn").onclick(); // auto-fund
+    statusEl.textContent = "⚡ Burner mode: instant entries, no wallet popups. Press RIDE.";
+  };
   $("faucetBtn").onclick = async () => {
     if (!wallet) return alert("Connect your wallet first.");
     const r = await (await fetch("/api/faucet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ wallet }) })).json();
@@ -217,7 +237,11 @@ async function payEntry() {
   tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
 
   let signature;
-  if (cfg.cluster === "surfnet") {
+  if (burnerKp) {
+    // burner mode: sign locally, send straight to the fork — instant, no popup
+    tx.sign(burnerKp);
+    signature = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: true });
+  } else if (cfg.cluster === "surfnet") {
     // local mainnet fork: the wallet can't broadcast to localhost, so it signs
     // and WE send the raw tx to the fork. (Wallet may warn "can't simulate" — expected.)
     const signed = await provider.signTransaction(tx);
@@ -370,7 +394,8 @@ function endRound(win, m) {
     multEl.style.color = "var(--green)";
   } else {
     overlay.querySelector("h2").textContent = `BUCKED AT ${m.m}x 💀`;
-    overlay.querySelector("p").textContent = (reasons[m.reason] || m.reason) + " Half your entry is burned forever — supply down, try again.";
+    const ceiling = m.crashPoint ? ` The bull's max this round was ${m.crashPoint}x.` : "";
+    overlay.querySelector("p").textContent = (reasons[m.reason] || m.reason) + ceiling + " Half your entry is burned forever — supply down, try again.";
     multEl.style.color = "var(--red)";
     multEl.style.animation = "shake .3s 3";
     setTimeout(() => (multEl.style.animation = ""), 1000);
