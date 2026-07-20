@@ -37,6 +37,14 @@ export function initSolana() {
   prizeAta = getAssociatedTokenAddressSync(mintPk, prizeKeypair.publicKey, false, tokenProgramPk);
   console.log(`[solana] cluster=${CONFIG.cluster} mint=${CONFIG.mint}`);
   console.log(`[solana] prize wallet=${prizeKeypair.publicKey.toBase58()} ata=${prizeAta.toBase58()}`);
+  // Surfpool forks are wiped on every restart — verify the pool account actually exists.
+  connection.getAccountInfo(prizeAta).then((acc) => {
+    if (!acc) {
+      console.warn("\n⚠️  PRIZE POOL ACCOUNT NOT FOUND ON CHAIN.");
+      console.warn("   If you restarted surfpool, the fork was wiped — re-run:");
+      console.warn("   npm run setup:surfpool <YOUR_WALLET_ADDRESS>\n");
+    }
+  }).catch(() => {});
   return { chainEnabled: true };
 }
 
@@ -70,7 +78,11 @@ export async function verifyEntryTx(signature, playerWallet) {
     commitment: "confirmed"
   });
   if (!tx) return { ok: false, reason: "tx_not_found" };
-  if (tx.meta?.err) return { ok: false, reason: "tx_failed" };
+  if (tx.meta?.err) {
+    console.log("[verify] entry tx reverted on-chain:", JSON.stringify(tx.meta.err));
+    console.log("[verify] logs:", (tx.meta.logMessages || []).slice(-5).join(" | "));
+    return { ok: false, reason: "tx_failed" };
+  }
   // Freshness check — skipped on surfnet (local fork clocks/blockTimes are unreliable;
   // single-use signature replay protection above is the real defense there).
   if (CONFIG.cluster !== "surfnet") {
