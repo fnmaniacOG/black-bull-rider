@@ -45,14 +45,34 @@ async function main() {
     }
   }
 
+  // 2.5 hard requirement: fees. If the faucet airdrop failed, stop with clear instructions.
+  const solBal = await conn.getBalance(prize.publicKey);
+  if (solBal < 0.05 * LAMPORTS_PER_SOL) {
+    console.error(`
+❌ Prize wallet has no devnet SOL (${solBal / LAMPORTS_PER_SOL} SOL) and the CLI airdrop is rate-limited.
+   Fund it via the web faucet (sign in with GitHub for higher limits):
+
+     https://faucet.solana.com  →  paste: ${prize.publicKey.toBase58()}
+
+   Then re-run this script.
+`);
+    process.exit(1);
+  }
+
   // 3. test $ANSEM mint (mainnet real mint: 9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump)
+  // Only reuse a saved mint if it came from a DEVNET config AND actually exists on this
+  // cluster — a leftover surfpool config points at the mainnet mint, which devnet lacks.
   const cfgPath = path.join(ROOT, "config.json");
-  let mint;
+  let mint = null;
   const existing = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, "utf8")) : {};
-  if (existing.mint) {
-    mint = new PublicKey(existing.mint);
-    console.log("Using existing test mint:", mint.toBase58());
-  } else {
+  if (existing.mint && existing.cluster === "devnet") {
+    const acc = await conn.getAccountInfo(new PublicKey(existing.mint));
+    if (acc) {
+      mint = new PublicKey(existing.mint);
+      console.log("Using existing devnet test mint:", mint.toBase58());
+    }
+  }
+  if (!mint) {
     mint = await createMint(conn, prize, prize.publicKey, null, DECIMALS);
     console.log("Created test $ANSEM mint:", mint.toBase58());
   }
