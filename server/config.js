@@ -21,9 +21,11 @@ export const CONFIG = {
   mint: process.env.MINT || fileCfg.mint || null,
   // legacy SPL Token by default; Token-2022 mints (like real $ANSEM) auto-detected by setup scripts
   tokenProgram: process.env.TOKEN_PROGRAM || fileCfg.tokenProgram || "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
-  decimals: fileCfg.decimals ?? 6,
+  decimals: Number(process.env.DECIMALS ?? fileCfg.decimals ?? 6),
   prizeWalletKeypairPath:
     process.env.PRIZE_WALLET_KEYPAIR || fileCfg.prizeWalletKeypairPath || path.join(ROOT, ".keys", "prize-wallet.json"),
+  // for cloud hosts (Render etc.): the secret key as a JSON array env var, instead of a file
+  prizeWalletSecret: process.env.PRIZE_WALLET_SECRET || null,
 
   // --- economics (base units computed from decimals at runtime) ---
   entryFeeTokens: 2,        // total entry fee in whole tokens

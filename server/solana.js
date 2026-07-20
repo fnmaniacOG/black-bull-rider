@@ -9,8 +9,10 @@ import {
 import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountIdempotentInstruction,
-  createTransferCheckedInstruction
+  createTransferCheckedInstruction,
+  createMintToInstruction
 } from "@solana/spl-token";
+import { SystemProgram } from "@solana/web3.js";
 import { CONFIG, halfFeeBaseUnits } from "./config.js";
 
 let connection = null;
@@ -31,7 +33,7 @@ export function initSolana() {
   connection = new Connection(CONFIG.rpcUrl, "confirmed");
   mintPk = new PublicKey(CONFIG.mint);
   prizeKeypair = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(fs.readFileSync(CONFIG.prizeWalletKeypairPath, "utf8")))
+    Uint8Array.from(JSON.parse(CONFIG.prizeWalletSecret || fs.readFileSync(CONFIG.prizeWalletKeypairPath, "utf8")))
   );
   tokenProgramPk = new PublicKey(CONFIG.tokenProgram);
   prizeAta = getAssociatedTokenAddressSync(mintPk, prizeKeypair.publicKey, false, tokenProgramPk);
@@ -156,6 +158,24 @@ export async function payout(playerWallet, tokens) {
   );
   const sig = await sendAndConfirmTransaction(connection, txn, [prizeKeypair]);
   return { ok: true, signature: sig, amountBaseUnits: amount.toString() };
+}
+
+// Devnet faucet: mint 100 test $ANSEM to any wallet (we hold the test-mint authority)
+// plus a little SOL for fees, so anyone can try the public demo.
+const faucetCooldown = new Map();
+export async function devnetFaucet(wallet) {
+  const last = faucetCooldown.get(wallet) || 0;
+  if (Date.now() - last < 60_000) return { ok: false, reason: "faucet_cooldown_60s" };
+  const player = new PublicKey(wallet);
+  const ata = getAssociatedTokenAddressSync(mintPk, player, false, tokenProgramPk);
+  const txn = new Transaction().add(
+    createAssociatedTokenAccountIdempotentInstruction(prizeKeypair.publicKey, ata, player, mintPk, tokenProgramPk),
+    createMintToInstruction(mintPk, ata, prizeKeypair.publicKey, BigInt(100) * 10n ** BigInt(CONFIG.decimals), [], tokenProgramPk),
+    SystemProgram.transfer({ fromPubkey: prizeKeypair.publicKey, toPubkey: player, lamports: 10_000_000 }) // 0.01 SOL for fees
+  );
+  const sig = await sendAndConfirmTransaction(connection, txn, [prizeKeypair]);
+  faucetCooldown.set(wallet, Date.now());
+  return { ok: true, tokens: 100, sol: 0.01, signature: sig };
 }
 
 export async function stats() {

@@ -72,6 +72,24 @@ scripts/setup-surfpool.js  surfpool bootstrap: real mint on a local mainnet fork
 scripts/setup-devnet.js    devnet bootstrap: test mint + faucet airdrops
 ```
 
+## Public devnet demo (share a link anyone can play)
+
+GitHub Pages can't host this — it only serves static files, and the game needs the Node
+backend. Deploy the whole app (one service) to Render's free tier instead:
+
+1. Locally: `npm run setup:devnet` → note the test mint address in `config.json`.
+2. Push this repo to GitHub. On [render.com](https://render.com): New → Blueprint → pick the repo
+   (`render.yaml` configures everything).
+3. Set the two secrets when prompted: `MINT` (test mint address) and `PRIZE_WALLET_SECRET`
+   (paste the JSON array from `.keys/prize-wallet.json`).
+4. Deploy → share `https://<your-app>.onrender.com`.
+
+Visitors: install Phantom → Settings → Developer Settings → enable Testnet Mode (Devnet)
+→ click 🚰 FAUCET in the game (mints 100 test $ANSEM + 0.01 SOL, 60s cooldown) → ride.
+
+Keep the prize wallet topped up with devnet SOL for faucet/payout fees:
+`solana airdrop 2 <PRIZE_WALLET> --url devnet`.
+
 ## Mainnet notes (read before flipping the switch)
 
 - Real-money games of chance are **regulated gambling** in most jurisdictions — get legal advice and licensing before mainnet.

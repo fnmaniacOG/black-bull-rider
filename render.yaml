@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: black-bull-rider
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server/index.js
+    envVars:
+      - key: CLUSTER
+        value: devnet
+      - key: RPC_URL
+        value: https://api.devnet.solana.com
+      - key: MINT
+        sync: false # your devnet test mint address (from config.json after npm run setup:devnet)
+      - key: DECIMALS
+        value: "6"
+      - key: PRIZE_WALLET_SECRET
+        sync: false # contents of .keys/prize-wallet.json (the JSON array) — set as a secret

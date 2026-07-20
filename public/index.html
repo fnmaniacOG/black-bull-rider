@@ -115,9 +115,9 @@ async function init() {
   cfg = await (await fetch("/api/config")).json();
   if (cfg.tokenProgram) TOKEN_PROGRAM = new PublicKey(cfg.tokenProgram);
   $("clusterStat").textContent = cfg.devMode ? "DEV MODE (free play)" : cfg.cluster === "surfnet" ? "surfpool (mainnet fork)" : cfg.cluster;
-  if (cfg.cluster === "surfnet" && !cfg.devMode) {
+  if ((cfg.cluster === "surfnet" || cfg.cluster === "devnet") && !cfg.devMode) {
     $("faucetBtn").style.display = "inline-block";
-    $("burnerBtn").style.display = "inline-block";
+    if (cfg.cluster === "surfnet") $("burnerBtn").style.display = "inline-block";
   }
   // Burner wallet (surfnet only): local keypair signs instantly — no Phantom popup.
   // Phantom is slow on the fork because it tries (and fails) to simulate against real mainnet.

@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import { CONFIG } from "./config.js";
 import { Round } from "./game.js";
-import { initSolana, verifyEntryTx, payout, publicInfo, stats } from "./solana.js";
+import { initSolana, verifyEntryTx, payout, publicInfo, stats, devnetFaucet } from "./solana.js";
 import { canStart, markStart, markEnd } from "./antibot.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -15,12 +15,18 @@ app.use(express.json());
 app.get("/api/config", (_req, res) => res.json(publicInfo()));
 app.get("/api/stats", async (_req, res) => res.json(await stats()));
 
-// Faucet — surfpool (local mainnet fork) only: give the connected wallet test tokens + SOL.
+// Faucet — surfnet (cheatcode) or devnet (we mint the test token): tokens + SOL for any wallet.
 app.post("/api/faucet", async (req, res) => {
-  if (CONFIG.cluster !== "surfnet") return res.status(403).json({ ok: false, reason: "faucet_only_on_surfnet" });
+  if (CONFIG.cluster !== "surfnet" && CONFIG.cluster !== "devnet") {
+    return res.status(403).json({ ok: false, reason: "faucet_disabled_on_mainnet" });
+  }
   try {
     const wallet = String(req.body?.wallet || "");
     if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) return res.status(400).json({ ok: false, reason: "bad_wallet" });
+    if (CONFIG.cluster === "devnet") {
+      const r = await devnetFaucet(wallet);
+      return res.status(r.ok ? 200 : 429).json(r);
+    }
     const r = await fetch(CONFIG.rpcUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
