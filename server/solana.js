@@ -71,19 +71,22 @@ export async function verifyEntryTx(signature, playerWallet) {
   });
   if (!tx) return { ok: false, reason: "tx_not_found" };
   if (tx.meta?.err) return { ok: false, reason: "tx_failed" };
-  // Freshness: prefer blockTime; some local validators (surfpool) don't return it,
-  // so fall back to slot distance (~2.5 slots/sec → txMaxAgeSec * 2.5 slots).
-  if (tx.blockTime) {
-    if (Date.now() / 1000 - tx.blockTime > CONFIG.antibot.txMaxAgeSec) {
-      return { ok: false, reason: "tx_too_old" };
-    }
-  } else if (typeof tx.slot === "number") {
-    const currentSlot = await connection.getSlot("confirmed");
-    if (currentSlot - tx.slot > CONFIG.antibot.txMaxAgeSec * 2.5) {
-      return { ok: false, reason: "tx_too_old" };
+  // Freshness check — skipped on surfnet (local fork clocks/blockTimes are unreliable;
+  // single-use signature replay protection above is the real defense there).
+  if (CONFIG.cluster !== "surfnet") {
+    if (tx.blockTime) {
+      if (Date.now() / 1000 - tx.blockTime > CONFIG.antibot.txMaxAgeSec) {
+        console.log(`[verify] rejected stale tx: blockTime=${tx.blockTime} now=${Math.floor(Date.now() / 1000)}`);
+        return { ok: false, reason: "tx_too_old" };
+      }
+    } else if (typeof tx.slot === "number") {
+      const currentSlot = await connection.getSlot("confirmed");
+      if (currentSlot - tx.slot > CONFIG.antibot.txMaxAgeSec * 2.5) {
+        console.log(`[verify] rejected stale tx: txSlot=${tx.slot} currentSlot=${currentSlot}`);
+        return { ok: false, reason: "tx_too_old" };
+      }
     }
   }
-  // (replay protection above is the primary defense — each signature is single-use)
 
   const half = halfFeeBaseUnits();
   let paidToPool = false;
